@@ -32,6 +32,7 @@ let tickCount = 0;
 let shakeTimer = 0;
 let hasPressedKey = false;
 let instructionText;
+let loadingAnim; // Global ref for the loading sprite
 
 // =======================================================
 // CORE PIXI INITIALIZATION
@@ -51,7 +52,6 @@ async function init() {
     app.stage.addChild(camera);
     camera.sortableChildren = true;
 
-    // Static event mode + hitArea ensures the entire screen catches taps/clicks
     app.stage.eventMode = 'static';
     app.stage.hitArea = app.screen;
 
@@ -62,17 +62,17 @@ async function init() {
     camera.y = centerY;
 
     instructionText = new PIXI.Text({
-        text: 'Loading assets...',
+        text: 'Starting...',
         style: {
             fontFamily: 'Roboto, sans-serif',
-            fontSize: 24,
+            fontSize: 20,
             fill: 0xffffff,
             align: 'center',
         }
     });
     instructionText.anchor.set(0.5);
     instructionText.x = centerX;
-    instructionText.y = centerY;
+    instructionText.y = centerY + 80; // Pushed down to make room for anim
     app.stage.addChild(instructionText);
 
     window.addEventListener('resize', () => {
@@ -85,23 +85,40 @@ async function init() {
         camera.y = ny;
         if (instructionText) {
             instructionText.x = nx;
-            instructionText.y = ny;
+            instructionText.y = ny + 80;
+        }
+        if (loadingAnim) {
+            loadingAnim.x = nx;
+            loadingAnim.y = ny;
         }
     });
     
     await loadAssets();
     setupInteraction();
-    app.ticker.maxFPS = 60;
 }
 
 async function loadAssets() {
+    // 1. Load the Loading Animation FIRST
+    await PIXI.Assets.load('assets/loading.json');
+    const loadSheet = PIXI.Assets.get('assets/loading.json');
+    const loadAnimKeys = Object.keys(loadSheet.animations);
+    
+    loadingAnim = new PIXI.AnimatedSprite(loadSheet.animations[loadAnimKeys[0]]);
+    loadingAnim.anchor.set(0.5);
+    loadingAnim.x = app.screen.width / 2;
+    loadingAnim.y = app.screen.height / 2;
+    loadingAnim.animationSpeed = 1; // 60fps
+    loadingAnim.play();
+    app.stage.addChild(loadingAnim);
+
+    // 2. Load the main assets
     const assetFolder = (window.innerWidth < 800) ? 'mobile' : 'desktop';
     const totalAssets = assetNames.length + 1;
     let loadedCount = 0;
 
     const updateProgress = () => {
         loadedCount++;
-        instructionText.text = `Loading ${loadedCount}/${totalAssets} assets`;
+        instructionText.text = `Loading ${loadedCount}/${totalAssets}`;
     };
 
     const assetManifest = assetNames.map(name => ({
@@ -118,15 +135,20 @@ async function loadAssets() {
         updateProgress();
     }
 
+    // 3. Clean up loading animation
+    app.stage.removeChild(loadingAnim);
+    loadingAnim.destroy();
+    loadingAnim = null;
+
     instructionText.text = isMobile 
         ? "Tap the screen to spawn Poms" 
         : "Press QWERTYUIOP to spawn Poms";
+    instructionText.y = app.screen.height / 2; // Center text now that anim is gone
 
     app.ticker.add(gameLoop);
 }
 
 function setupInteraction() {
-    // 1. Desktop Keyboard Support
     document.addEventListener('keydown', (e) => {
         if (e.repeat) return;
         const keyIndex = CODE_MAP.indexOf(e.code);
@@ -139,7 +161,6 @@ function setupInteraction() {
         }
     });
 
-    // 2. Mobile/Mouse Tap Support
     app.stage.on('pointerdown', (e) => {
         hasPressedKey = true;
         const t = e.global.x / app.screen.width;

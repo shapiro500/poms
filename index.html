@@ -3,23 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'self' 'unsafe-eval' blob: https://pixijs.download; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' data: https://pixijs.download;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'self' 'unsafe-eval' blob: https://pixijs.download; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' data: https://pixijs.download;">
+    
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+    
     <title>Poms</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+    
     <style>
         body { 
             margin: 0; 
             overflow: hidden; 
             background-color: #000000; 
-            /* Optional: Set a background color for the canvas container */
         }
         canvas { 
             display: block; 
         }
+        /* Instagram Credit Styling */
+        #credit-link {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            color: #888888;
+            font-family: 'Roboto', sans-serif;
+            font-size: 14px;
+            text-decoration: none;
+            transition: color 0.2s ease;
+            z-index: 100; /* Ensure it stays above the canvas */
+            user-select: none;
+        }
+        #credit-link:hover {
+            color: #ffffff;
+        }
     </style>
 </head>
 <body>
+    <a href="https://www.instagram.com/shapiro500/" target="_blank" id="credit-link">shapiro500</a>
+
     <script src="https://pixijs.download/v8.6.6/pixi.min.js"></script>
-    
     <script src="app.js"></script>
 </body>
 </html>
