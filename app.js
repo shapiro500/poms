@@ -47,6 +47,8 @@ async function init() {
         backgroundAlpha: 0,
         roundPixels: true,
     });
+
+    app.ticker.maxFPS = 60; 
     document.body.appendChild(app.canvas || app.view);
     
     app.stage.addChild(camera);
