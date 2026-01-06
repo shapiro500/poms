@@ -2,25 +2,27 @@
 // CONFIGURATION & SETUP
 // =======================================================
 const MOVE_ANGLE_DEG = 50;
-const SPREAD_STRENGTH = -40;   
+const SPREAD_STRENGTH = -40;
 const BASE_SPEED = 4;
 const MAX_SPEED_FACTOR = 3.0;
-const SPAWN_RANDOMNESS = 1.0; 
+const SPAWN_RANDOMNESS = 1.0;
 
-const SHOCKWAVE_KEY = 'shockwave'; 
-const SHOCKWAVE_SPEED_MULT = 0.3; 
+const SHOCKWAVE_KEY = 'shockwave';
+const SHOCKWAVE_SPEED_MULT = 0.3;
 
-const SHAKE_DURATION = 8;    
-const SHAKE_MAX_Y = 10;       
-const SHAKE_MAX_X = 2;       
-const SHAKE_MAX_ROT = 0.5;   
+const SHAKE_DURATION = 8;
+const SHAKE_MAX_Y = 10;
+const SHAKE_MAX_X = 2;
+const SHAKE_MAX_ROT = 0.5;
 
 const SPAWN_LINE_START = { x: 0.05, y: 0.2 };
 const SPAWN_LINE_END = { x: 0.7, y: 0.0 };
 
-const CODE_MAP = ['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyT', 'KeyY', 'KeyU', 'KeyI', 'KeyO', 'KeyP']; 
+const CODE_MAP = ['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyT', 'KeyY', 'KeyU', 'KeyI', 'KeyO', 'KeyP'];
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 2.0;
+
+const DRAG_SPAWN_RATE = 4; // Spawns every N ticks while dragging (smaller = faster)
 
 const isMobile = /Mobi|Android/i.test(navigator.userAgent) || window.innerWidth < 800;
 
@@ -31,6 +33,9 @@ let assetNames = Array.from({ length: 10 }, (_, i) => `char_${(i + 1).toString()
 let tickCount = 0;
 let shakeTimer = 0;
 let hasPressedKey = false;
+let isPointerDown = false;
+let pointerX = 0;
+let lastSpawnTick = -999;
 let instructionText;
 let loadingAnim; // Global ref for the loading sprite
 
@@ -41,16 +46,16 @@ const app = new PIXI.Application();
 const camera = new PIXI.Container();
 
 async function init() {
-    await app.init({ 
-        width: window.innerWidth, 
-        height: window.innerHeight, 
+    await app.init({
+        width: window.innerWidth,
+        height: window.innerHeight,
         backgroundAlpha: 0,
         roundPixels: true,
     });
 
-    app.ticker.maxFPS = 60; 
+    app.ticker.maxFPS = 60;
     document.body.appendChild(app.canvas || app.view);
-    
+
     app.stage.addChild(camera);
     camera.sortableChildren = true;
 
@@ -94,7 +99,7 @@ async function init() {
             loadingAnim.y = ny;
         }
     });
-    
+
     await loadAssets();
     setupInteraction();
 }
@@ -104,7 +109,7 @@ async function loadAssets() {
     await PIXI.Assets.load('assets/loading.json');
     const loadSheet = PIXI.Assets.get('assets/loading.json');
     const loadAnimKeys = Object.keys(loadSheet.animations);
-    
+
     loadingAnim = new PIXI.AnimatedSprite(loadSheet.animations[loadAnimKeys[0]]);
     loadingAnim.anchor.set(0.5);
     loadingAnim.x = app.screen.width / 2;
@@ -142,8 +147,8 @@ async function loadAssets() {
     loadingAnim.destroy();
     loadingAnim = null;
 
-    instructionText.text = isMobile 
-        ? "Tap the screen to spawn Poms" 
+    instructionText.text = isMobile
+        ? "Tap the screen to spawn Poms"
         : "Press QWERTYUIOP to spawn Poms";
     instructionText.y = app.screen.height / 2; // Center text now that anim is gone
 
@@ -156,7 +161,7 @@ function setupInteraction() {
         const keyIndex = CODE_MAP.indexOf(e.code);
         if (keyIndex !== -1) {
             hasPressedKey = true;
-            const t = keyIndex / (CODE_MAP.length - 1); 
+            const t = keyIndex / (CODE_MAP.length - 1);
             const textureKey = assetNames[Math.floor(Math.random() * assetNames.length)];
             spawnPair(t, textureKey);
             shakeTimer = SHAKE_DURATION;
@@ -164,12 +169,26 @@ function setupInteraction() {
     });
 
     app.stage.on('pointerdown', (e) => {
+        isPointerDown = true;
+        pointerX = e.global.x;
         hasPressedKey = true;
-        const t = e.global.x / app.screen.width;
-        const textureKey = assetNames[Math.floor(Math.random() * assetNames.length)];
-        spawnPair(t, textureKey);
-        shakeTimer = SHAKE_DURATION;
+        spawnAtPointer();
     });
+
+    app.stage.on('pointermove', (e) => {
+        pointerX = e.global.x;
+    });
+
+    app.stage.on('pointerup', () => { isPointerDown = false; });
+    app.stage.on('pointerupoutside', () => { isPointerDown = false; });
+}
+
+function spawnAtPointer() {
+    const t = pointerX / app.screen.width;
+    const textureKey = assetNames[Math.floor(Math.random() * assetNames.length)];
+    spawnPair(t, textureKey);
+    shakeTimer = SHAKE_DURATION;
+    lastSpawnTick = tickCount;
 }
 
 function spawnPair(t, charKey) {
@@ -180,7 +199,7 @@ function spawnPair(t, charKey) {
     const startY = app.screen.height * SPAWN_LINE_START.y;
     const endX = app.screen.width * SPAWN_LINE_END.x;
     const endY = app.screen.height * SPAWN_LINE_END.y;
-    
+
     const posX = startX + finalT * (endX - startX);
     const posY = startY + finalT * (endY - startY);
 
@@ -193,11 +212,11 @@ function spawnPair(t, charKey) {
         if (sprite) {
             sprite.x = posX;
             sprite.y = posY;
-            sprite.scale.set(MIN_SCALE); 
+            sprite.scale.set(MIN_SCALE);
             const speed = isShockwave ? (BASE_SPEED * SHOCKWAVE_SPEED_MULT) : BASE_SPEED;
             sprite.vx_base = Math.cos(radians) * speed;
             sprite.vy_base = Math.sin(radians) * speed;
-            sprite.gotoAndStop(0); 
+            sprite.gotoAndStop(0);
             sprite.visible = true;
             if (!activeSprites.includes(sprite)) activeSprites.push(sprite);
         }
@@ -210,21 +229,21 @@ function getSpriteFromPool(textureKey, isShockwave = false) {
         const sheet = PIXI.Assets.get(textureKey);
         const animKeys = Object.keys(sheet.animations);
         if (animKeys.length === 0) return null;
-        
+
         sprite = new PIXI.AnimatedSprite(sheet.animations[animKeys[0]]);
-        sprite.autoUpdate = false; 
+        sprite.autoUpdate = false;
         sprite.loop = false;
-        sprite.anchor.set(0.5, 0.70); 
+        sprite.anchor.set(0.5, 0.70);
         sprite.visible = false;
         sprite.textureKey = textureKey;
         sprite.isShockwave = isShockwave;
-        
+
         if (isShockwave) {
             sprite.blendMode = 'screen';
             sprite.anchor.set(0.45, 0.25);
         }
-        
-        camera.addChild(sprite); 
+
+        camera.addChild(sprite);
         spritePool.push(sprite);
     }
     return sprite;
@@ -232,9 +251,9 @@ function getSpriteFromPool(textureKey, isShockwave = false) {
 
 function gameLoop() {
     tickCount++;
-    
+
     if (hasPressedKey && instructionText && instructionText.alpha > 0) {
-        instructionText.alpha -= 0.034; 
+        instructionText.alpha -= 0.034;
         if (instructionText.alpha <= 0) {
             app.stage.removeChild(instructionText);
             instructionText.destroy();
@@ -243,6 +262,10 @@ function gameLoop() {
     }
 
     if (tickCount % 2 === 0) {
+        if (isPointerDown && (tickCount - lastSpawnTick >= DRAG_SPAWN_RATE)) {
+            spawnAtPointer();
+        }
+
         const centerX = app.screen.width / 2;
         const centerY = app.screen.height / 2;
 
@@ -260,10 +283,10 @@ function gameLoop() {
             const sprite = activeSprites[i];
             if (!sprite.visible) { activeSprites.splice(i, 1); continue; }
 
-            const depthFactor = Math.max(0, sprite.y / app.screen.height); 
+            const depthFactor = Math.max(0, sprite.y / app.screen.height);
             const scale = MIN_SCALE + (MAX_SCALE - MIN_SCALE) * depthFactor;
             const speedMultiplier = 1 + (MAX_SPEED_FACTOR - 1) * depthFactor;
-            
+
             sprite.scale.set(scale);
             sprite.zIndex = sprite.isShockwave ? (scale - 10) : scale;
             sprite.x += sprite.vx_base * speedMultiplier * 2;
@@ -276,7 +299,7 @@ function gameLoop() {
                 sprite.stop();
             }
 
-            if (sprite.x > app.screen.width + 800 || sprite.x < -800 || 
+            if (sprite.x > app.screen.width + 800 || sprite.x < -800 ||
                 sprite.y > app.screen.height + 800 || sprite.y < -800) {
                 sprite.visible = false;
             }
